@@ -19,17 +19,28 @@ int main() {
   int total_number_of_queries;
   scanf("%d", &total_number_of_queries);
 
+  // the number of shelves will never be modified so we can malloc here
+  total_number_of_books = (int*)calloc(total_number_of_shelves, sizeof(int));
+  if (total_number_of_books == NULL) {
+    return 1;
+  }
+
+  // allocate int pointer sizes for each shelf
+  total_number_of_pages = (int**)malloc(total_number_of_shelves * sizeof(int*));
+  if (total_number_of_pages == NULL) {
+    return 1;
+  }
+
   while (total_number_of_queries--) {
     int type_of_query;
     scanf("%d", &type_of_query);
-
     if (type_of_query == 1) {
-      /*
-       * Process the query of first type here.
-       */
       int x, y;
       scanf("%d %d", &x, &y);
-
+      total_number_of_pages[x] = (int*)realloc(
+          total_number_of_pages[x], sizeof(int) * total_number_of_books[x] + 1);
+      total_number_of_pages[x][total_number_of_books[x]] = y;
+      total_number_of_books[x] += 1;
     } else if (type_of_query == 2) {
       int x, y;
       scanf("%d %d", &x, &y);
