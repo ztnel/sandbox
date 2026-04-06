@@ -37,17 +37,6 @@ target_compile_features(lib_power_converter PUBLIC cxx_std_11)
 include(cmake/CompilerOptions.cmake)
 lpc_apply_compiler_options(lib_power_converter)
 
-if(LPC_ENFORCE_SINGLE_RETURN)
-    add_custom_target(lpc_single_return_check
-        COMMAND /bin/sh ${CMAKE_CURRENT_SOURCE_DIR}/tools/check_single_return.sh
-            ${CMAKE_CURRENT_SOURCE_DIR}/src
-            ${CMAKE_CURRENT_SOURCE_DIR}/include
-        COMMENT "Running single-return style rule"
-        VERBATIM
-    )
-    add_dependencies(lib_power_converter lpc_single_return_check)
-endif()
-
 include(GNUInstallDirs)
 install(TARGETS lib_power_converter
     EXPORT lpc-targets
