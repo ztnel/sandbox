@@ -46,14 +46,14 @@ static uint64_t now_us() {
     return (uint64_t)tv.tv_sec * 1000000ULL + (uint64_t)tv.tv_usec;
 }
 
-ServiceManager::ServiceManager(IPollable** pollables, size_t npoll,
-                               IEventDriven** events, size_t nevents,
-                               IISRHandler** isrs, size_t nisrs)
-    : pollables_(pollables), npoll_(npoll),
-      events_(events), nevents_(nevents),
-      isrs_(isrs), nisrs_(nisrs)
+ServiceManager::ServiceManager(StaticSpan<IPollable*> pollables,
+                               StaticSpan<IEventDriven*> events,
+                               StaticSpan<IISRHandler*> isrs)
+    : pollables_(pollables.data()), npoll_(pollables.size()),
+      events_(events.data()), nevents_(events.size()),
+      isrs_(isrs.data()), nisrs_(isrs.size())
 {
-    // Initialize profile entries with generated names (no name arrays in C++03)
+    // Initialize profile entries with generated names
     pthread_mutex_lock(&g_mutex);
     char buf[64];
     for (size_t i = 0; i < npoll_; ++i) {

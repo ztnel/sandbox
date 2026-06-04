@@ -67,15 +67,16 @@ int main() {
     EventTask e;
     ISRHandler h;
 
-    IPollable* pollables[] = { &p };
+    IPollable* pollables_arr[] = { &p };
+    StaticSpan<IPollable*> pollables(pollables_arr, 1);
 
-    IEventDriven* events[] = { &e };
+    IEventDriven* events_arr[] = { &e };
+    StaticSpan<IEventDriven*> events(events_arr, 1);
 
-    IISRHandler* isrs[] = { &h };
+    IISRHandler* isrs_arr[] = { &h };
+    StaticSpan<IISRHandler*> isrs(isrs_arr, 1);
 
-    ServiceManager mgr(pollables, 1,
-                       events, 1,
-                       isrs, 1);
+    ServiceManager mgr(pollables, events, isrs);
 
     // start backgrounds
     mgr.startAllEventDriven();

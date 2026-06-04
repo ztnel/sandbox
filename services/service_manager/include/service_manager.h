@@ -1,6 +1,7 @@
 #pragma once
 
 #include "interfaces.h"
+#include "static_span.h"
 #include <stdint.h>
 #include <stddef.h>
 
@@ -8,10 +9,10 @@ namespace Services {
 
 class ServiceManager {
 public:
-    // Constructor takes pointers and counts (C++03-compatible "span" emulation).
-    ServiceManager(IPollable** pollables, size_t npoll,
-                   IEventDriven** events, size_t nevents,
-                   IISRHandler** isrs, size_t nisrs);
+    // Constructor takes StaticSpan instances (pointer+size pairs) for C++03.
+    ServiceManager(StaticSpan<IPollable*> pollables,
+                   StaticSpan<IEventDriven*> events,
+                   StaticSpan<IISRHandler*> isrs);
 
     // Main-loop operations
     void processAll();
