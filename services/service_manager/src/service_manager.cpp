@@ -1,11 +1,10 @@
 #include "service_manager.h"
 #include <vector>
-#include <map>
-#include <string>
 #include <sys/time.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <string.h>
 
 namespace Services {
 
@@ -17,7 +16,29 @@ struct ProfileData {
 };
 
 static pthread_mutex_t g_mutex = PTHREAD_MUTEX_INITIALIZER;
-static std::map<std::string, ProfileData> g_profiles;
+
+// Fixed-size profile storage for baremetal-safety prototype
+static const int MAX_PROFILES = 128;
+static ProfileData g_profiles_arr[MAX_PROFILES];
+static char g_profile_names[MAX_PROFILES][32];
+static int g_profile_count = 0;
+
+static int find_profile(const char* name) {
+    for (int i = 0; i < g_profile_count; ++i) {
+        if (strcmp(g_profile_names[i], name) == 0) return i;
+    }
+    return -1;
+}
+
+static int add_profile(const char* name) {
+    if (g_profile_count >= MAX_PROFILES) return -1;
+    strncpy(g_profile_names[g_profile_count], name, sizeof(g_profile_names[g_profile_count]) - 1);
+    g_profile_names[g_profile_count][sizeof(g_profile_names[g_profile_count]) - 1] = '\0';
+    // zero-initialize profile data
+    g_profiles_arr[g_profile_count] = ProfileData();
+    ++g_profile_count;
+    return g_profile_count - 1;
+}
 
 static uint64_t now_us() {
     struct timeval tv;
@@ -25,44 +46,36 @@ static uint64_t now_us() {
     return (uint64_t)tv.tv_sec * 1000000ULL + (uint64_t)tv.tv_usec;
 }
 
-ServiceManager::ServiceManager(IPollable** pollables, size_t npoll, const char** pollable_names,
-                               IEventDriven** events, size_t nevents, const char** event_names,
-                               IISRHandler** isrs, size_t nisrs, const char** isr_names)
-    : pollables_(pollables), npoll_(npoll), pollable_names_(pollable_names),
-      events_(events), nevents_(nevents), event_names_(event_names),
-      isrs_(isrs), nisrs_(nisrs), isr_names_(isr_names)
+ServiceManager::ServiceManager(IPollable** pollables, size_t npoll,
+                               IEventDriven** events, size_t nevents,
+                               IISRHandler** isrs, size_t nisrs)
+    : pollables_(pollables), npoll_(npoll),
+      events_(events), nevents_(nevents),
+      isrs_(isrs), nisrs_(nisrs)
 {
-    // Initialize profile entries from provided names
+    // Initialize profile entries with generated names (no name arrays in C++03)
     pthread_mutex_lock(&g_mutex);
-    if (pollable_names_) {
-        for (size_t i = 0; i < npoll_; ++i) {
-            if (pollable_names_[i]) g_profiles[std::string(pollable_names_[i])] = ProfileData();
-        }
-    } else {
-        g_profiles[std::string("pollable")] = ProfileData();
+    char buf[64];
+    for (size_t i = 0; i < npoll_; ++i) {
+        snprintf(buf, sizeof(buf), "pollable%u", (unsigned)i);
+        add_profile(buf);
     }
-    if (event_names_) {
-        for (size_t i = 0; i < nevents_; ++i) {
-            if (event_names_[i]) g_profiles[std::string(event_names_[i])] = ProfileData();
-        }
-    } else {
-        g_profiles[std::string("eventtask")] = ProfileData();
+    for (size_t i = 0; i < nevents_; ++i) {
+        snprintf(buf, sizeof(buf), "eventtask%u", (unsigned)i);
+        add_profile(buf);
     }
-    if (isr_names_) {
-        for (size_t i = 0; i < nisrs_; ++i) {
-            if (isr_names_[i]) g_profiles[std::string(isr_names_[i])] = ProfileData();
-        }
-    } else {
-        g_profiles[std::string("isr")] = ProfileData();
+    for (size_t i = 0; i < nisrs_; ++i) {
+        snprintf(buf, sizeof(buf), "isr%u", (unsigned)i);
+        add_profile(buf);
     }
     pthread_mutex_unlock(&g_mutex);
 }
 
 void ServiceManager::isrNotify(const char* name) {
     pthread_mutex_lock(&g_mutex);
-    std::string k(name);
-    ProfileData &p = g_profiles[k];
-    p.count += 1; // record event occurrence
+    int idx = find_profile(name);
+    if (idx < 0) idx = add_profile(name);
+    if (idx >= 0) g_profiles_arr[idx].count += 1; // record event occurrence
     pthread_mutex_unlock(&g_mutex);
 }
 
@@ -76,18 +89,22 @@ void ServiceManager::invokeISRHandlers() {
             uint64_t t1 = now_us();
             uint64_t dt = (t1 > t0) ? (t1 - t0) : 0;
             pthread_mutex_lock(&g_mutex);
-            // attribute to provided name if available
-            const char* nm = (isr_names_ && isr_names_[i]) ? isr_names_[i] : "isr";
-            ProfileData &p = g_profiles[std::string(nm)];
-            p.count += 1;
-            p.total_us += dt;
-            if (dt > p.max_us) p.max_us = dt;
+            char buf[64];
+            snprintf(buf, sizeof(buf), "isr%u", (unsigned)i);
+            int idx = find_profile(buf);
+            if (idx >= 0) {
+                ProfileData &p = g_profiles_arr[idx];
+                p.count += 1;
+                p.total_us += dt;
+                if (dt > p.max_us) p.max_us = dt;
+            }
             pthread_mutex_unlock(&g_mutex);
         }
     }
 }
 
 void ServiceManager::processAll() {
+    char buf[64];
     for (size_t i = 0; i < npoll_; ++i) {
         IPollable* s = pollables_[i];
         if (!s) continue;
@@ -96,11 +113,14 @@ void ServiceManager::processAll() {
         uint64_t t1 = now_us();
         uint64_t dt = (t1 > t0) ? (t1 - t0) : 0;
         pthread_mutex_lock(&g_mutex);
-        const char* nm = (pollable_names_ && pollable_names_[i]) ? pollable_names_[i] : "pollable";
-        ProfileData &p = g_profiles[std::string(nm)];
-        p.count += 1;
-        p.total_us += dt;
-        if (dt > p.max_us) p.max_us = dt;
+        snprintf(buf, sizeof(buf), "pollable%u", (unsigned)i);
+        int idx = find_profile(buf);
+        if (idx >= 0) {
+            ProfileData &p = g_profiles_arr[idx];
+            p.count += 1;
+            p.total_us += dt;
+            if (dt > p.max_us) p.max_us = dt;
+        }
         pthread_mutex_unlock(&g_mutex);
     }
 }
@@ -120,11 +140,11 @@ void ServiceManager::stopAllEventDriven() {
 void ServiceManager::printProfiles() {
     pthread_mutex_lock(&g_mutex);
     printf("Profiles:\n");
-    for (std::map<std::string, ProfileData>::const_iterator it = g_profiles.begin(); it != g_profiles.end(); ++it) {
-        const ProfileData &p = it->second;
+    for (int i = 0; i < g_profile_count; ++i) {
+        const ProfileData &p = g_profiles_arr[i];
         double avg = (p.count > 0) ? (double)p.total_us / (double)p.count : 0.0;
         printf("  %s: count=%llu total_us=%llu avg=%.2f max_us=%llu\n",
-               it->first.c_str(), (unsigned long long)p.count, (unsigned long long)p.total_us, avg, (unsigned long long)p.max_us);
+               g_profile_names[i], (unsigned long long)p.count, (unsigned long long)p.total_us, avg, (unsigned long long)p.max_us);
     }
     pthread_mutex_unlock(&g_mutex);
 }

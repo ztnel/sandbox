@@ -8,9 +8,10 @@ namespace Services {
 
 class ServiceManager {
 public:
-    ServiceManager(IPollable** pollables, size_t npoll, const char** pollable_names,
-                   IEventDriven** events, size_t nevents, const char** event_names,
-                   IISRHandler** isrs, size_t nisrs, const char** isr_names);
+    // Constructor takes pointers and counts (C++03-compatible "span" emulation).
+    ServiceManager(IPollable** pollables, size_t npoll,
+                   IEventDriven** events, size_t nevents,
+                   IISRHandler** isrs, size_t nisrs);
 
     // Main-loop operations
     void processAll();
@@ -31,15 +32,12 @@ public:
 private:
     IPollable** pollables_;
     size_t npoll_;
-    const char** pollable_names_;
 
     IEventDriven** events_;
     size_t nevents_;
-    const char** event_names_;
 
     IISRHandler** isrs_;
     size_t nisrs_;
-    const char** isr_names_;
 
     // opaque internal state (implemented in cpp)
 };

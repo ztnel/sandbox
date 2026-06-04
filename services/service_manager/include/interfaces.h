@@ -5,8 +5,8 @@ namespace Services {
 class IService {
 public:
     virtual ~IService() {}
-    // Optional initialization hook for services
-    virtual void init() {}
+    // Initialization hook for services; made pure-virtual per review
+    virtual void init() = 0;
 };
 
 class IPollable : public IService {

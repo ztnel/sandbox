@@ -1,7 +1,6 @@
 #include "service_manager.h"
 #include "interfaces.h"
-#include <unistd.h>
-#include <pthread.h>
+#include "platform.h"
 #include <stdio.h>
 
 using namespace Services;
@@ -9,6 +8,7 @@ using namespace Services;
 // Simple pollable service
 class Poller : public IPollable {
 public:
+    void init() {}
     void process() {
         // simulate some work
         for (volatile int i=0;i<10000;++i) {}
@@ -18,44 +18,46 @@ public:
 // Simple event-driven service that runs in a thread
 class EventTask : public IEventDriven {
 public:
-    pthread_t thread;
+    platform_thread_t thread;
     bool running;
     static void* threadFn(void* arg) {
         EventTask* self = (EventTask*)arg;
         while (self->running) {
             // simulate background work
             for (volatile int i=0;i<20000;++i) {}
-            usleep(10000);
+            platform_sleep_us(10000);
         }
         return NULL;
     }
     EventTask(): running(false) {}
+    void init() {}
     void start() {
         running = true;
-        pthread_create(&thread, NULL, threadFn, this);
+        platform_thread_create(&thread, threadFn, this);
     }
     void stop() {
         running = false;
-        pthread_join(thread, NULL);
+        platform_thread_join(thread);
     }
 };
 
 // ISR handler example: must be short
 class ISRHandler : public IISRHandler {
 public:
+    void init() {}
     void onISR() {
         // quick operation
         for (volatile int i=0;i<1000;++i) {}
     }
 };
 
-static pthread_t isr_thread;
+static platform_thread_t isr_thread;
 static bool isr_running = false;
 static void* isr_sim_fn(void* arg) {
     ServiceManager* mgr = (ServiceManager*)arg;
     while (isr_running) {
         mgr->invokeISRHandlers();
-        usleep(2000); // simulate frequent ISR
+        platform_sleep_us(2000); // simulate frequent ISR
     }
     return NULL;
 }
@@ -66,26 +68,23 @@ int main() {
     ISRHandler h;
 
     IPollable* pollables[] = { &p };
-    const char* pollable_names[] = { "poller" };
 
     IEventDriven* events[] = { &e };
-    const char* event_names[] = { "eventtask" };
 
     IISRHandler* isrs[] = { &h };
-    const char* isr_names[] = { "isr_handler" };
 
-    ServiceManager mgr(pollables, 1, pollable_names,
-                       events, 1, event_names,
-                       isrs, 1, isr_names);
+    ServiceManager mgr(pollables, 1,
+                       events, 1,
+                       isrs, 1);
 
     // start backgrounds
     mgr.startAllEventDriven();
     isr_running = true;
-    pthread_create(&isr_thread, NULL, isr_sim_fn, &mgr);
+    platform_thread_create(&isr_thread, isr_sim_fn, &mgr);
 
     for (int i = 0; i < 200; ++i) {
         mgr.processAll();
-        usleep(5000);
+        platform_sleep_us(5000);
         if (i % 50 == 0) {
             // simulate software ISR notification
             mgr.isrNotify("poller");
@@ -94,7 +93,7 @@ int main() {
 
     // stop
     isr_running = false;
-    pthread_join(isr_thread, NULL);
+    platform_thread_join(isr_thread);
     mgr.stopAllEventDriven();
 
     mgr.printProfiles();
