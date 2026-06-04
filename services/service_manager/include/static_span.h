@@ -14,3 +14,9 @@ private:
     T* data_;
     size_t size_;
 };
+
+// Helper to construct StaticSpan from C-style array
+template <typename T, size_t N>
+static inline StaticSpan<T> make_static_span(T (&arr)[N]) {
+    return StaticSpan<T>(arr, N);
+}

@@ -65,22 +65,20 @@ static uint64_t now_us() {
 ServiceManager::ServiceManager(StaticSpan<IPollable*> pollables,
                                StaticSpan<IEventDriven*> events,
                                StaticSpan<IISRHandler*> isrs)
-    : pollables(pollables.data()), npoll(pollables.size()),
-      events(events.data()), nevents(events.size()),
-      isrs(isrs.data()), nisrs(isrs.size())
+    : pollables(pollables), events(events), isrs(isrs)
 {
     // Initialize profile entries with generated names
     pthread_mutex_lock(&g_mutex);
     char buf[64];
-    for (size_t i = 0; i < npoll; ++i) {
+    for (size_t i = 0; i < this->pollables.size(); ++i) {
         snprintf(buf, sizeof(buf), "pollable%u", (unsigned)i);
         add_profile(buf);
     }
-    for (size_t i = 0; i < nevents; ++i) {
+    for (size_t i = 0; i < this->events.size(); ++i) {
         snprintf(buf, sizeof(buf), "eventtask%u", (unsigned)i);
         add_profile(buf);
     }
-    for (size_t i = 0; i < nisrs; ++i) {
+    for (size_t i = 0; i < this->isrs.size(); ++i) {
         snprintf(buf, sizeof(buf), "isr%u", (unsigned)i);
         add_profile(buf);
     }
@@ -101,7 +99,7 @@ void ServiceManager::isrNotify(const char* name) {
 
 void ServiceManager::invokeISRHandlers() {
     // Call ISR handlers without locking registrations (registrations are static in this model)
-    for (size_t i = 0; i < nisrs; ++i) {
+    for (size_t i = 0; i < isrs.size(); ++i) {
         IISRHandler* h = isrs[i];
         if (h) {
             uint64_t t0 = now_us();
@@ -123,7 +121,7 @@ void ServiceManager::invokeISRHandlers() {
 
 void ServiceManager::processAll() {
     char buf[64];
-    for (size_t i = 0; i < npoll; ++i) {
+    for (size_t i = 0; i < pollables.size(); ++i) {
         IPollable* s = pollables[i];
         if (!s) continue;
         uint64_t t0 = now_us();
@@ -141,13 +139,13 @@ void ServiceManager::processAll() {
 }
 
 void ServiceManager::startAllEventDriven() {
-    for (size_t i = 0; i < nevents; ++i) {
+    for (size_t i = 0; i < events.size(); ++i) {
         if (events[i]) events[i]->start();
     }
 }
 
 void ServiceManager::stopAllEventDriven() {
-    for (size_t i = 0; i < nevents; ++i) {
+    for (size_t i = 0; i < events.size(); ++i) {
         if (events[i]) events[i]->stop();
     }
 }

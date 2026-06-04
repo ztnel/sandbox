@@ -22,7 +22,10 @@ public:
     virtual ~IEventDriven() {}
 };
 
-// ISR handler interface: implementations must be short and ISR-safe
+// ISR handler interface: implementations must be short and ISR-safe.
+// Note: IPollable::process() is intended for main-loop polling and may perform
+// longer work. IISRHandler::onISR() is explicitly constrained for ISR context
+// (no allocations, minimal inlining). Keep both to make intent explicit.
 class IISRHandler : public IService {
 public:
     virtual void onISR() = 0;

@@ -9,3 +9,7 @@ target_include_directories(service_manager PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/in
 
 add_executable(example_main examples/main.cpp)
 target_link_libraries(example_main service_manager)
+
+# Tests
+enable_testing()
+add_subdirectory(tests)
