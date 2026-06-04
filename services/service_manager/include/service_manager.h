@@ -31,14 +31,14 @@ public:
     void isrNotify(const char* name);
 
 private:
-    IPollable** pollables_;
-    size_t npoll_;
+    IPollable** pollables;
+    size_t npoll;
 
-    IEventDriven** events_;
-    size_t nevents_;
+    IEventDriven** events;
+    size_t nevents;
 
-    IISRHandler** isrs_;
-    size_t nisrs_;
+    IISRHandler** isrs;
+    size_t nisrs;
 
     // opaque internal state (implemented in cpp)
 };
